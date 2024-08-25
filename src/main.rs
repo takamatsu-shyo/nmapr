@@ -1,3 +1,4 @@
+use ipnetwork::IpNetwork;
 use pnet::packet::icmp::echo_request::MutableEchoRequestPacket;
 use pnet::packet::icmp::{echo_request, IcmpPacket, IcmpTypes};
 use pnet::packet::Packet;
@@ -38,12 +39,14 @@ fn ping(ip: Ipv4Addr) -> bool {
 
     let mut iter = icmp_packet_iter(&mut rx);
     match iter.next_with_timeout(Duration::from_secs(1)) {
-        Ok(Some((_packet, addr))) => {
-            println!("Recv packet from: {}", addr);
-            return true;
+        Ok(Some((received_packet, addr))) => {
+            if addr == ip {
+                println!("Recv packet from: {}", addr);
+                return true;
+            }
         }
         Ok(None) => {
-            println!("No packet recv in timeout");
+            println!("No packet recv in timeout {}", ip);
         }
         Err(e) => {
             eprintln!("Err recv packet: {}", e);
@@ -53,18 +56,37 @@ fn ping(ip: Ipv4Addr) -> bool {
     false
 }
 
-const USAGE: &str = "USAGE: sudo nmapr <TARGET IP>";
+fn get_ipv4_addresses(input: &str) -> Result<Vec<Ipv4Addr>, String> {
+    if let Ok(cidr) = input.parse::<IpNetwork>() {
+        match cidr {
+            IpNetwork::V4(network) => Ok(network.iter().collect()),
+            IpNetwork::V6(_) => Err("IPv6 range is not supported".to_string()),
+        }
+    } else if let Ok(ip) = input.parse::<Ipv4Addr>() {
+        Ok(vec![ip])
+    } else {
+        Err(format!("Invalid IP or CIDR notation: {}", input))
+    }
+}
 
 fn main() {
-    let mut args = env::args().skip(1);
-    let Some(ip) = args.next() else {
-        eprintln!("{USAGE}");
-        process::exit(1);
-    };
+    let args: Vec<String> = env::args().skip(1).collect();
 
-    if ping(ip.parse().expect("Failed to parse IP addr")) {
-        println!("{} is up", ip);
-    } else {
-        println!("{} seems not up", ip);
+    if args.len() != 1 {
+        eprintln!("Usage: sudo nmapr <IP or IP/CIDR>");
+        return;
+    }
+
+    match get_ipv4_addresses(&args[0]) {
+        Ok(ips) => {
+            for ip in ips {
+                if ping(ip) {
+                    println!("{} is up", ip);
+                } else {
+                    println!("{} is down", ip);
+                }
+            }
+        }
+        Err(e) => eprintln!("Err: {}", e),
     }
 }
