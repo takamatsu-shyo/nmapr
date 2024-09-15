@@ -1,4 +1,5 @@
 use ipnetwork::IpNetwork;
+use log::{debug, error, info, warn};
 use pnet::packet::icmp::echo_request::MutableEchoRequestPacket;
 use pnet::packet::icmp::{echo_request, IcmpPacket, IcmpTypes};
 use pnet::packet::Packet;
@@ -27,10 +28,10 @@ fn build_icmp_packet(identify_number: u16) -> [u8; 16] {
 
 fn process_packet(expected_ip: &Ipv4Addr, received_ip: IpAddr) -> bool {
     if &received_ip == expected_ip {
-        println!("Recv packet from: {}", received_ip);
+        info!("Recv packet from: {}", received_ip);
         return true;
     } else {
-        //println!("Unexpected packet from: {} - {}", expected_ip, received_ip);
+        warn!("Unexpected packet from: {} - {}", expected_ip, received_ip);
         return false;
     }
 }
@@ -56,7 +57,7 @@ fn ping(ip: Ipv4Addr) -> bool {
     let packet = IcmpPacket::new(&packet_data).unwrap();
 
     if let Err(e) = tx.send_to(&packet, ip.into()) {
-        eprintln!("Err sending packet to {}: {}", ip, e);
+        warn!("Err sending packet to {}: {}", ip, e);
         return false;
     }
 
@@ -71,7 +72,7 @@ fn ping(ip: Ipv4Addr) -> bool {
             //println!("No packet recv in timeout {}", ip);
         }
         Err(e) => {
-            eprintln!("Err recv packet: {}", e);
+            error!("Err recv packet: {}", e);
         }
     }
 
@@ -87,6 +88,7 @@ fn get_ipv4_addresses(input: &str) -> Result<Vec<Ipv4Addr>, String> {
     } else if let Ok(ip) = input.parse::<Ipv4Addr>() {
         Ok(vec![ip])
     } else {
+        error!("Invalid IP or CIDR notation: {}", input);
         Err(format!("Invalid IP or CIDR notation: {}", input))
     }
 }
@@ -97,10 +99,12 @@ struct PingResult {
 }
 
 fn main() {
+    env_logger::init();
+
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.len() != 1 {
-        eprintln!("Usage: sudo nmapr <IP or IP/CIDR>");
+        info!("Usage: sudo nmapr <IP or IP/CIDR>");
         return;
     }
 
@@ -116,12 +120,14 @@ fn main() {
 
             for result in ping_results {
                 if result.is_up {
-                    println!("{} is up", result.ip_addr);
+                    info!("{} is up", result.ip_addr);
                 } else {
-                    //println!("{} is down", result.ip_addr);
+                    debug!("{} is down", result.ip_addr);
                 }
             }
         }
-        Err(e) => eprintln!("Err: {}", e),
+        Err(e) => {
+            error!("Err: {}", e);
+        }
     }
 }
