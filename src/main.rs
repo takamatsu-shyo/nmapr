@@ -1,4 +1,7 @@
-use ipnetwork::IpNetwork;
+mod ipv4_util;
+
+use crate::ipv4_util::get_ipv4_addresses;
+
 use log::{debug, error, info, warn};
 use pnet::packet::icmp::echo_request::MutableEchoRequestPacket;
 use pnet::packet::icmp::{echo_request, IcmpPacket, IcmpTypes};
@@ -77,20 +80,6 @@ fn ping(ip: Ipv4Addr) -> bool {
     }
 
     false
-}
-
-fn get_ipv4_addresses(input: &str) -> Result<Vec<Ipv4Addr>, String> {
-    if let Ok(cidr) = input.parse::<IpNetwork>() {
-        match cidr {
-            IpNetwork::V4(network) => Ok(network.iter().collect()),
-            IpNetwork::V6(_) => Err("IPv6 range is not supported".to_string()),
-        }
-    } else if let Ok(ip) = input.parse::<Ipv4Addr>() {
-        Ok(vec![ip])
-    } else {
-        error!("Invalid IP or CIDR notation: {}", input);
-        Err(format!("Invalid IP or CIDR notation: {}", input))
-    }
 }
 
 struct PingResult {
